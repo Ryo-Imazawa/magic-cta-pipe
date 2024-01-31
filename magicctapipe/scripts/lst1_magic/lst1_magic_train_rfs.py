@@ -41,11 +41,7 @@ import numpy as np
 import pandas as pd
 import yaml
 
-from magicctapipe.io import (
-    format_object,
-    load_train_data_files_tel,
-    telescope_combinations,
-)
+from magicctapipe.io import format_object, load_train_data_files
 from magicctapipe.io.io import GROUP_INDEX_TRAIN
 from magicctapipe.reco import DispRegressor, EnergyRegressor, EventClassifier
 
@@ -66,6 +62,12 @@ EVENT_CLASS_PROTON = 1
 
 # Set the random seed
 random.seed(1000)
+
+TEL_NAMES = {
+    1: "LST-1",
+    2: "MAGIC-I",
+    3: "MAGIC-II",
+}  # TODO: REMOVE WHEN SWITCHING TO THE NEW RFs IMPLEMENTTATION (1 RF PER TELESCOPE)
 
 
 def get_events_at_random(event_data, n_events_random):
@@ -119,8 +121,6 @@ def train_energy_regressor(input_dir, output_dir, config, use_unsigned_features=
 
     config_rf = config["energy_regressor"]
 
-    TEL_NAMES, _ = telescope_combinations(config)
-
     gamma_offaxis = config_rf["gamma_offaxis"]
 
     logger.info("\nGamma off-axis angles allowed:")
@@ -129,8 +129,8 @@ def train_energy_regressor(input_dir, output_dir, config, use_unsigned_features=
     # Load the input files
     logger.info(f"\nInput directory: {input_dir}")
 
-    event_data_train = load_train_data_files_tel(
-        input_dir, config, gamma_offaxis["min"], gamma_offaxis["max"]
+    event_data_train = load_train_data_files(
+        input_dir, gamma_offaxis["min"], gamma_offaxis["max"]
     )
 
     # Configure the energy regressor
@@ -142,37 +142,32 @@ def train_energy_regressor(input_dir, output_dir, config, use_unsigned_features=
 
     logger.info(f"\nUse unsigned features: {use_unsigned_features}")
 
-    logger.info(f"\nconfiguration file: {config}")
-    logger.info(f'\nmc_tel_ids: {config["mc_tel_ids"]}')
     energy_regressor = EnergyRegressor(
-        TEL_NAMES, config_rf["settings"], config_rf["features"], use_unsigned_features
+        config_rf["settings"], config_rf["features"], use_unsigned_features
     )
 
     # Create the output directory
     Path(output_dir).mkdir(exist_ok=True, parents=True)
 
     # Loop over every telescope combination type
-    for tel_id, df_train in event_data_train.items():
-
-        logger.info(f"\nEnergy regressors for the telescope ID '{tel_id}' :")
+    for tel_combo, df_train in event_data_train.items():
+        logger.info(f"\nEnergy regressors for the '{tel_combo}' type:")
 
         # Train the RFs
         energy_regressor.fit(df_train)
 
         # Check the feature importance
-        telescope_rf = energy_regressor.telescope_rfs[tel_id]
-
-        importances = telescope_rf.feature_importances_.round(5)
-        importances = dict(zip(energy_regressor.features, importances))
-
-        logger.info(f"\n{TEL_NAMES[tel_id]} feature importance:")
-        logger.info(format_object(importances))
+        for tel_id, telescope_rf in energy_regressor.telescope_rfs.items():
+            importances = telescope_rf.feature_importances_.round(5)
+            importances = dict(zip(energy_regressor.features, importances))
+            logger.info(f"\n{TEL_NAMES[tel_id]} feature importance:")
+            logger.info(format_object(importances))
 
         # Save the trained RFs
         if use_unsigned_features:
-            output_file = f"{output_dir}/energy_regressors_{tel_id}_unsigned.joblib"
+            output_file = f"{output_dir}/energy_regressors_{tel_combo}_unsigned.joblib"
         else:
-            output_file = f"{output_dir}/energy_regressors_{tel_id}.joblib"
+            output_file = f"{output_dir}/energy_regressors_{tel_combo}.joblib"
 
         energy_regressor.save(output_file)
 
@@ -197,18 +192,15 @@ def train_disp_regressor(input_dir, output_dir, config, use_unsigned_features=Fa
 
     config_rf = config["disp_regressor"]
 
-    TEL_NAMES, _ = telescope_combinations(config)
-
     gamma_offaxis = config_rf["gamma_offaxis"]
-
     logger.info("\nGamma off-axis angles allowed:")
     logger.info(format_object(gamma_offaxis))
 
     # Load the input files
     logger.info(f"\nInput directory: {input_dir}")
 
-    event_data_train = load_train_data_files_tel(
-        input_dir, config, gamma_offaxis["min"], gamma_offaxis["max"]
+    event_data_train = load_train_data_files(
+        input_dir, gamma_offaxis["min"], gamma_offaxis["max"]
     )
 
     # Configure the DISP regressor
@@ -221,34 +213,30 @@ def train_disp_regressor(input_dir, output_dir, config, use_unsigned_features=Fa
     logger.info(f"\nUse unsigned features: {use_unsigned_features}")
 
     disp_regressor = DispRegressor(
-        TEL_NAMES, config_rf["settings"], config_rf["features"], use_unsigned_features
+        config_rf["settings"], config_rf["features"], use_unsigned_features
     )
 
     # Create the output directory
     Path(output_dir).mkdir(exist_ok=True, parents=True)
 
     # Loop over every telescope combination type
-    for tel_id, df_train in event_data_train.items():
-
-        logger.info(f"\nDISP regressors for the telescope ID '{tel_id}':")
-
+    for tel_combo, df_train in event_data_train.items():
+        logger.info(f"\nDISP regressors for the '{tel_combo}' type:")
         # Train the RFs
         disp_regressor.fit(df_train)
 
         # Check the feature importance
-        telescope_rf = disp_regressor.telescope_rfs[tel_id]
+        for tel_id, telescope_rf in disp_regressor.telescope_rfs.items():
+            importances = telescope_rf.feature_importances_.round(5)
+            importances = dict(zip(disp_regressor.features, importances))
 
-        importances = telescope_rf.feature_importances_.round(5)
-        importances = dict(zip(disp_regressor.features, importances))
-
-        logger.info(f"\n{TEL_NAMES[tel_id]} feature importance:")
-        logger.info(format_object(importances))
-
+            logger.info(f"\n{TEL_NAMES[tel_id]} feature importance:")
+            logger.info(format_object(importances))
         # Save the trained RFs to an output file
         if use_unsigned_features:
-            output_file = f"{output_dir}/disp_regressors_{tel_id}_unsigned.joblib"
+            output_file = f"{output_dir}/disp_regressors_{tel_combo}_unsigned.joblib"
         else:
-            output_file = f"{output_dir}/disp_regressors_{tel_id}.joblib"
+            output_file = f"{output_dir}/disp_regressors_{tel_combo}.joblib"
 
         disp_regressor.save(output_file)
 
@@ -277,8 +265,6 @@ def train_event_classifier(
 
     config_rf = config["event_classifier"]
 
-    TEL_NAMES, _ = telescope_combinations(config)
-
     gamma_offaxis = config_rf["gamma_offaxis"]
 
     logger.info("\nGamma off-axis angles allowed:")
@@ -287,9 +273,8 @@ def train_event_classifier(
     # Load the input gamma MC data files
     logger.info(f"\nInput gamma MC directory: {input_dir_gamma}")
 
-    event_data_gamma = load_train_data_files_tel(
+    event_data_gamma = load_train_data_files(
         input_dir_gamma,
-        config,
         gamma_offaxis["min"],
         gamma_offaxis["max"],
         EVENT_CLASS_GAMMA,
@@ -298,8 +283,8 @@ def train_event_classifier(
     # Load the input proton MC data files
     logger.info(f"\nInput proton MC directory: {input_dir_proton}")
 
-    event_data_proton = load_train_data_files_tel(
-        input_dir_proton, config, true_event_class=EVENT_CLASS_PROTON
+    event_data_proton = load_train_data_files(
+        input_dir_proton, true_event_class=EVENT_CLASS_PROTON
     )
 
     # Configure the event classifier
@@ -312,7 +297,7 @@ def train_event_classifier(
     logger.info(f"\nUse unsigned features: {use_unsigned_features}")
 
     event_classifier = EventClassifier(
-        TEL_NAMES, config_rf["settings"], config_rf["features"], use_unsigned_features
+        config_rf["settings"], config_rf["features"], use_unsigned_features
     )
 
     # Create the output directory
@@ -321,12 +306,11 @@ def train_event_classifier(
     # Loop over every telescope combination type
     common_combinations = set(event_data_gamma.keys()) & set(event_data_proton.keys())
 
-    for tel_id in sorted(common_combinations):
+    for tel_combo in sorted(common_combinations):
+        logger.info(f"\nEvent classifiers for the '{tel_combo}' type:")
 
-        logger.info(f"\nEvent classifiers for the telescope ID '{tel_id}':")
-
-        df_gamma = event_data_gamma[tel_id]
-        df_proton = event_data_proton[tel_id]
+        df_gamma = event_data_gamma[tel_combo]
+        df_proton = event_data_proton[tel_combo]
 
         # Adjust the number of training samples
         n_events_gamma = len(df_gamma.groupby(GROUP_INDEX_TRAIN).size())
@@ -346,19 +330,17 @@ def train_event_classifier(
         event_classifier.fit(df_train)
 
         # Check the feature importance
-        telescope_rf = event_classifier.telescope_rfs[tel_id]
-
-        importances = telescope_rf.feature_importances_.round(5)
-        importances = dict(zip(event_classifier.features, importances))
-
-        logger.info(f"\n{TEL_NAMES[tel_id]} feature importance:")
-        logger.info(format_object(importances))
+        for tel_id, telescope_rf in event_classifier.telescope_rfs.items():
+            importances = telescope_rf.feature_importances_.round(5)
+            importances = dict(zip(event_classifier.features, importances))
+            logger.info(f"\n{TEL_NAMES[tel_id]} feature importance:")
+            logger.info(format_object(importances))
 
         # Save the trained RFs to an output file
         if use_unsigned_features:
-            output_file = f"{output_dir}/event_classifiers_{tel_id}_unsigned.joblib"
+            output_file = f"{output_dir}/event_classifiers_{tel_combo}_unsigned.joblib"
         else:
-            output_file = f"{output_dir}/event_classifiers_{tel_id}.joblib"
+            output_file = f"{output_dir}/event_classifiers_{tel_combo}.joblib"
 
         event_classifier.save(output_file)
 

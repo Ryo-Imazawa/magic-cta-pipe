@@ -14,7 +14,7 @@ from pyirf.binning import split_bin_lo_hi
 from magicctapipe import __version__
 from magicctapipe.utils.functions import HEIGHT_ORM, LAT_ORM, LON_ORM
 
-from .io import telescope_combinations
+# from .io import telescope_combinations
 
 __all__ = [
     "create_gh_cuts_hdu",
@@ -90,7 +90,7 @@ def create_gh_cuts_hdu(gh_cuts, reco_energy_bins, fov_offset_bins, **header_card
 
 
 def create_event_hdu(
-    event_table, config, on_time, deadc, source_name, source_ra=None, source_dec=None
+    event_table, on_time, deadc, source_name, source_ra=None, source_dec=None
 ):
     """
     Creates a fits binary table HDU for shower events.
@@ -99,8 +99,6 @@ def create_event_hdu(
     ----------
     event_table : astropy.table.table.QTable
         Table of the DL2 events surviving gammaness cuts
-    config : dict
-        Dictionary with information about the telescope IDs.
     on_time : astropy.table.table.QTable
         ON time of the input data
     deadc : float
@@ -127,7 +125,12 @@ def create_event_hdu(
         If the source name cannot be resolved and also either or both of
         source RA/Dec coordinate is set to None
     """
-    _, TEL_COMBINATIONS = telescope_combinations(config)
+    TEL_COMBINATIONS = {
+        "M1_M2": [2, 3],  # combo_type = 0
+        "LST1_M1": [1, 2],  # combo_type = 1
+        "LST1_M2": [1, 3],  # combo_type = 2
+        "LST1_M1_M2": [1, 2, 3],  # combo_type = 3
+    }  # TODO: REMOVE WHEN SWITCHING TO THE NEW RFs IMPLEMENTTATION (1 RF PER TELESCOPE)
 
     mjdreff, mjdrefi = np.modf(MJDREF.mjd)
 
