@@ -231,8 +231,12 @@ class DispRegressor:
         tel_ids = np.unique(event_data["tel_id"])
 
         for tel_id in tel_ids:
+
             df_events = event_data.query(f"tel_id == {tel_id}").copy()
             df_events.dropna(subset=self.features, inplace=True)
+
+            if df_events.empty:
+                continue
 
             x_train = df_events[self.features].to_numpy()
 
@@ -389,8 +393,12 @@ class EventClassifier:
         tel_ids = np.unique(event_data["tel_id"])
 
         for tel_id in tel_ids:
+
             df_events = event_data.query(f"tel_id == {tel_id}").copy()
             df_events.dropna(subset=self.features, inplace=True)
+
+            if df_events.empty:
+                continue
 
             x_train = df_events[self.features].to_numpy()
 
